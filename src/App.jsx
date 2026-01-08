@@ -1,7 +1,14 @@
 import React, { Component } from 'react';
-import { MessageSquare, Bell, LogOut, Send, Plus, Trash2, Globe, User as UserIcon, Lock, Mail } from 'lucide-react';
+// [FIX]: Added 'Edit2' and 'CheckCircle' to imports to prevent crash (White Screen)
+import { MessageSquare, Bell, LogOut, Send, Plus, Trash2, Globe, User as UserIcon, Lock, Mail, Edit2, CheckCircle } from 'lucide-react';
 
-// [1] Clean Code: Import translation files from external folder
+/**
+ * ==================================================================================
+ * [1] LOCALIZATION DATA (Simulating External JSON)
+ * ==================================================================================
+ */
+
+// In VS Code, you should import these from separate files:
 import en from './locales/en.json';
 import de from './locales/de.json';
 
@@ -9,10 +16,9 @@ const TRANSLATIONS = { en, de };
 
 /**
  * ==================================================================================
- * [2] CONSTANTS & CONFIGURATION
+ * [2] CONFIGURATION
  * ==================================================================================
  */
-
 const MAJORS = [
   "Data Science MSc",
   "Digital Business & Data Science BSc",
@@ -28,7 +34,6 @@ const MAJORS = [
   "Visual & Experience Design MA"
 ];
 
-// Mock Data for Initial State
 const INITIAL_ANNOUNCEMENTS = [
   { id: 1, title: "Semester Break", content: "Campus closed from Dec 24.", author: "Prof. Weber", date: "2024-12-01" },
   { id: 2, title: "Project Deadline", content: "Submit SRS by Friday.", author: "Prof. Schmidt", date: "2024-12-05" }
@@ -41,11 +46,9 @@ const INITIAL_CHATS = [
 
 /**
  * ==================================================================================
- * [3] OBJECT-ORIENTED DOMAIN MODELS (100% OOP)
+ * [3] OBJECT-ORIENTED DOMAIN MODELS
  * ==================================================================================
  */
-
-// Base Class
 class User {
   constructor(name, email, role) {
     this.name = name;
@@ -53,13 +56,45 @@ class User {
     this.role = role;
   }
 
-  login() {
-    // Authentication logic would go here
-    return true;
+  /**
+   * Static Validation Method
+   * Encapsulates all validation logic for Registration.
+   */
+  static validateSignup(email, password, confirmPassword, name) {
+    if (!email || !password || !confirmPassword || !name) return 'errorEmpty';
+    if (!email.endsWith('@ue-germany.de')) return 'errorEmail';
+    if (password !== confirmPassword) return 'errorMismatch';
+    return null; // Valid
   }
 
+  /**
+   * Static Factory Method for Login
+   * Encapsulates login validation and object creation.
+   */
+  static login(email, password) {
+    // 1. Validate Input
+    if (!email || !password) return { success: false, error: 'errorEmpty' };
+    if (!email.endsWith('@ue-germany.de')) return { success: false, error: 'errorEmail' };
+
+    // 2. Identify Role (Mock Logic)
+    const isProfessor = email.includes('prof');
+    const role = isProfessor ? 'professor' : 'student';
+    const name = isProfessor ? "Prof. Member" : "UE Student"; // Default name for login
+
+    // 3. Create Specific Object
+    let userInstance;
+    if (role === 'student') {
+      userInstance = new Student(name, email, MAJORS[0]); // Default major for login demo
+    } else {
+      userInstance = new Professor(name, email);
+    }
+
+    return { success: true, user: userInstance };
+  }
+
+  // Instance Method: Logout
   logout() {
-    // Cleanup logic would go here
+    console.log(`User ${this.email} logged out.`);
     return true;
   }
 }
@@ -71,7 +106,9 @@ class Student extends User {
     this.major = major;
   }
 
+  // Core Business Logic: Create Message
   sendMessage(content) {
+    if (!content.trim()) return null;
     return {
       id: Date.now(),
       sender: this.name,
@@ -88,7 +125,9 @@ class Professor extends User {
     super(name, email, 'professor');
   }
 
+  // Core Business Logic: Create Announcement
   postAnnouncement(title, content) {
+    if (!title.trim() || !content.trim()) return null;
     return {
       id: Date.now(),
       title: title,
@@ -97,64 +136,87 @@ class Professor extends User {
       date: new Date().toISOString().split('T')[0]
     };
   }
+
+  // Core Business Logic: Update Announcement
+  editAnnouncement(originalPost, newTitle, newContent) {
+    if (!newTitle.trim() || !newContent.trim()) return null;
+    return {
+      ...originalPost,
+      title: newTitle,
+      content: newContent,
+      date: new Date().toISOString().split('T')[0] + " (Edited)"
+    };
+  }
+
+  // Core Business Logic: Delete Announcement
+  deleteAnnouncement(id) {
+    return id; 
+  }
 }
 
 /**
  * ==================================================================================
- * [4] REACT CONTROLLER (Main App Class)
+ * [4] REACT CONTROLLER (Main App)
+ * Handlers are minimal. They delegate logic to User/Student/Professor classes.
  * ==================================================================================
  */
 class App extends Component {
   constructor(props) {
     super(props);
-    
     this.state = {
-      // System
       lang: 'en',
       authMode: 'login',
       currentUser: null,
       error: '',
-
-      // Data
       chats: INITIAL_CHATS,
       announcements: INITIAL_ANNOUNCEMENTS,
-
-      // Inputs
-      email: '', password: '', name: '', role: 'student', major: MAJORS[0],
-      msgInput: '', noticeTitle: '', noticeContent: '', activeTab: 'chat'
+      email: '', password: '', confirmPassword: '', name: '', role: 'student', major: MAJORS[0],
+      msgInput: '', noticeTitle: '', noticeContent: '', activeTab: 'chat', editingId: null
     };
   }
 
-  // Helper: Get text from JSON files
   t = (key) => TRANSLATIONS[this.state.lang][key] || key;
 
-  // --- Auth Logic ---
-  handleAuth = (e) => {
+  // --- Auth Handler: Delegates to User Class ---
+  handleLogin = (e) => {
     e.preventDefault();
-    const { email, name, role, major } = this.state;
+    const { email, password } = this.state;
 
-    // 1. Validation
-    if (!email.endsWith('@ue-germany.de')) {
-      this.setState({ error: this.t('errorEmail') });
+    // Delegate Logic to Class
+    const result = User.login(email, password);
+
+    if (!result.success) {
+      this.setState({ error: this.t(result.error) });
+    } else {
+      this.setState({
+        currentUser: result.user,
+        error: '',
+        activeTab: result.user.role === 'professor' ? 'notice' : 'chat'
+      });
+    }
+  };
+
+  handleSignup = (e) => {
+    e.preventDefault();
+    const { email, password, confirmPassword, name, role, major } = this.state;
+
+    // Delegate Logic to Class (Static Validation)
+    const errorKey = User.validateSignup(email, password, confirmPassword, name);
+    if (errorKey) {
+      this.setState({ error: this.t(errorKey) });
       return;
     }
 
-    // 2. Factory Pattern (OOP)
-    const displayName = name || (role === 'student' ? "UE Student" : "Prof. Member");
-    let userInstance;
-
+    // Create Object
+    let newUser;
     if (role === 'student') {
-      userInstance = new Student(displayName, email, major);
+      newUser = new Student(name, email, major);
     } else {
-      userInstance = new Professor(displayName, email);
+      newUser = new Professor(name, email);
     }
 
-    // 3. Login
-    userInstance.login();
-
-    // 4. Update UI
     this.setState({
-      currentUser: userInstance,
+      currentUser: newUser,
       error: '',
       activeTab: role === 'professor' ? 'notice' : 'chat'
     });
@@ -162,67 +224,100 @@ class App extends Component {
 
   handleLogout = () => {
     const { currentUser } = this.state;
-    if (currentUser) {
-      currentUser.logout();
-      this.setState({ currentUser: null, email: '', password: '' });
-    }
+    if (currentUser) currentUser.logout(); // Delegate
+    this.setState({ currentUser: null, email: '', password: '', confirmPassword: '' });
   };
 
-  toggleLanguage = () => {
-    this.setState(prevState => ({
-      lang: prevState.lang === 'en' ? 'de' : 'en'
-    }));
+  handleLanguageChange = (e) => {
+    this.setState({ lang: e.target.value });
   };
 
-  // --- Feature Logic ---
+  // --- Feature Handlers: Delegate to Subclasses ---
   handleSendMessage = (e) => {
     e.preventDefault();
     const { currentUser, msgInput, chats } = this.state;
 
-    // OOP Check: Only Student Instance can send messages
-    if (currentUser instanceof Student && msgInput.trim()) {
+    if (currentUser instanceof Student) {
+      // Delegate Logic to Student Class
       const newMessage = currentUser.sendMessage(msgInput);
-      this.setState({
-        chats: [...chats, newMessage],
-        msgInput: ''
-      });
+      if (newMessage) {
+        this.setState({ chats: [...chats, newMessage], msgInput: '' });
+      }
     }
   };
 
-  handlePostAnnouncement = (e) => {
+  handleSaveAnnouncement = (e) => {
     e.preventDefault();
-    const { currentUser, noticeTitle, noticeContent, announcements } = this.state;
+    const { currentUser, noticeTitle, noticeContent, announcements, editingId } = this.state;
 
-    // OOP Check: Only Professor Instance can post
-    if (currentUser instanceof Professor && noticeTitle.trim()) {
-      const newNotice = currentUser.postAnnouncement(noticeTitle, noticeContent);
-      this.setState({
-        announcements: [newNotice, ...announcements],
-        noticeTitle: '',
-        noticeContent: ''
-      });
+    if (currentUser instanceof Professor) {
+      if (editingId) {
+        // UPDATE: Delegate to Professor Class
+        const targetPost = announcements.find(n => n.id === editingId);
+        const updatedPost = currentUser.editAnnouncement(targetPost, noticeTitle, noticeContent);
+        if (updatedPost) {
+          this.setState({
+            announcements: announcements.map(n => n.id === editingId ? updatedPost : n),
+            noticeTitle: '', noticeContent: '', editingId: null
+          });
+        }
+      } else {
+        // CREATE: Delegate to Professor Class
+        const newNotice = currentUser.postAnnouncement(noticeTitle, noticeContent);
+        if (newNotice) {
+          this.setState({
+            announcements: [newNotice, ...announcements],
+            noticeTitle: '', noticeContent: ''
+          });
+        }
+      }
     }
   };
 
   handleDeleteNotice = (id) => {
-    this.setState(prevState => ({
-      announcements: prevState.announcements.filter(n => n.id !== id)
-    }));
+    const { currentUser, announcements } = this.state;
+    if (currentUser instanceof Professor) {
+      // DELETE: Delegate to Professor Class
+      const deletedId = currentUser.deleteAnnouncement(id);
+      this.setState({ announcements: announcements.filter(n => n.id !== deletedId) });
+    }
+  };
+
+  // --- View Helpers ---
+  handleEditClick = (notice) => {
+    this.setState({ noticeTitle: notice.title, noticeContent: notice.content, editingId: notice.id });
+  };
+
+  handleCancelEdit = () => {
+    this.setState({ noticeTitle: '', noticeContent: '', editingId: null });
   };
 
   // --- Render ---
   render() {
-    const { currentUser, lang, authMode, email, password, name, role, major, error, 
-            activeTab, chats, announcements, msgInput, noticeTitle, noticeContent } = this.state;
+    const { currentUser, lang, authMode, email, password, confirmPassword, name, role, major, error, 
+            activeTab, chats, announcements, msgInput, noticeTitle, noticeContent, editingId } = this.state;
+
+    // --- SHARED: Language Dropdown Component ---
+    const LanguageSelect = () => (
+      <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full text-sm font-medium">
+        <Globe size={16} className="text-gray-600" />
+        <select 
+          value={lang} 
+          onChange={this.handleLanguageChange}
+          className="bg-transparent border-none outline-none text-gray-700 font-bold cursor-pointer"
+        >
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+        </select>
+      </div>
+    );
 
     // 1. Auth Screen
     if (!currentUser) {
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans">
           <div className="absolute top-5 right-5">
-            <button onClick={this.toggleLanguage} className="flex items-center gap-2 px-3 py-1 bg-gray-200 rounded-full text-sm font-medium hover:bg-gray-300 transition-colors">
-              <Globe size={16} /> {lang.toUpperCase()}
-            </button>
+            <LanguageSelect />
           </div>
           
           <div className="bg-white w-full max-w-md p-8 rounded-2xl shadow-xl border border-gray-100">
@@ -233,7 +328,7 @@ class App extends Component {
               </p>
             </div>
 
-            <form onSubmit={this.handleAuth} className="space-y-4">
+            <form onSubmit={authMode === 'login' ? this.handleLogin : this.handleSignup} className="space-y-4">
               <div className="relative">
                 <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
                 <input 
@@ -251,6 +346,13 @@ class App extends Component {
 
               {authMode === 'signup' && (
                 <>
+                  <div className="relative">
+                    <CheckCircle className="absolute left-3 top-3 text-gray-400" size={18} />
+                    <input 
+                      type="password" placeholder={this.t('confirmPasswordLabel')} className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                      value={confirmPassword} onChange={e => this.setState({ confirmPassword: e.target.value })} 
+                    />
+                  </div>
                   <div className="relative">
                     <UserIcon className="absolute left-3 top-3 text-gray-400" size={18} />
                     <input type="text" placeholder={this.t('nameLabel')} className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
@@ -279,13 +381,13 @@ class App extends Component {
 
               {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">⚠️ {error}</div>}
 
-              <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-md">
+              <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-md transition-all">
                 {authMode === 'login' ? this.t('loginBtn') : this.t('signupBtn')}
               </button>
             </form>
             
             <div className="mt-6 text-center">
-              <button onClick={() => this.setState({ authMode: authMode === 'login' ? 'signup' : 'login', error: '' })} 
+              <button onClick={() => this.setState({ authMode: authMode === 'login' ? 'signup' : 'login', error: '', password: '', confirmPassword: '' })} 
                 className="text-sm text-blue-600 hover:underline font-medium">
                 {authMode === 'login' ? this.t('switchSignup') : this.t('switchLogin')}
               </button>
@@ -301,9 +403,7 @@ class App extends Component {
         <aside className="w-full md:w-72 bg-white shadow-lg z-10 flex flex-col">
           <div className="p-6 border-b flex justify-between items-center bg-blue-600 text-white">
             <h1 className="text-xl font-bold">{this.t('appTitle')}</h1>
-            <button onClick={this.toggleLanguage} className="flex items-center gap-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-sm font-medium transition-colors">
-              <Globe size={16} /> {lang.toUpperCase()}
-            </button>
+            <LanguageSelect />
           </div>
 
           <div className="p-6 bg-blue-50 border-b border-blue-100">
@@ -311,9 +411,9 @@ class App extends Component {
               <div className="w-12 h-12 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold">
                 {currentUser.name.charAt(0)}
               </div>
-              <div className="overflow-hidden">
+              <div>
                 <p className="font-bold text-gray-800 truncate">{currentUser.name}</p>
-                <span className="text-xs font-semibold px-2 py-0.5 bg-blue-600 text-white rounded-full uppercase tracking-wider">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-blue-600 text-white rounded-full uppercase">
                   {currentUser.role === 'student' ? this.t('student') : this.t('professor')}
                 </span>
               </div>
@@ -347,7 +447,6 @@ class App extends Component {
         </aside>
 
         <main className="flex-1 flex flex-col h-[calc(100vh-60px)] md:h-screen overflow-hidden">
-          {/* Chat Tab */}
           {activeTab === 'chat' && currentUser instanceof Student && (
             <div className="flex flex-col h-full bg-gray-50">
               <header className="bg-white p-4 shadow-sm border-b flex justify-between items-center sticky top-0 z-10">
@@ -377,19 +476,25 @@ class App extends Component {
             </div>
           )}
 
-          {/* Notice Tab */}
           {activeTab === 'notice' && (
             <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-gray-50">
               <div className="max-w-3xl mx-auto">
                 <h2 className="text-2xl font-bold text-gray-800 mb-6 border-l-4 border-blue-600 pl-4">{this.t('noticeTitle')}</h2>
                 {currentUser instanceof Professor && (
-                  <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-8">
-                    <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2"><Plus size={20} /> {this.t('noticeCreate')}</h3>
-                    <form onSubmit={this.handlePostAnnouncement} className="space-y-4">
+                  <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-8 transition-all">
+                    <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
+                      {editingId ? <Edit2 size={20} /> : <Plus size={20} />} {editingId ? "Edit" : this.t('noticeCreate')}
+                    </h3>
+                    <form onSubmit={this.handleSaveAnnouncement} className="space-y-4">
                       <input type="text" placeholder={this.t('titlePlaceholder')} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={noticeTitle} onChange={e => this.setState({ noticeTitle: e.target.value })} />
                       <textarea placeholder={this.t('contentPlaceholder')} className="w-full px-4 py-2 border rounded-lg h-24 focus:ring-2 focus:ring-blue-500 outline-none resize-none" value={noticeContent} onChange={e => this.setState({ noticeContent: e.target.value })} />
-                      <div className="flex justify-end">
-                        <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-sm">{this.t('postBtn')}</button>
+                      <div className="flex justify-end gap-2">
+                        {editingId && (
+                          <button type="button" onClick={this.handleCancelEdit} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300">{this.t('cancel')}</button>
+                        )}
+                        <button type="submit" className={`px-6 py-2 text-white rounded-lg font-bold shadow-sm ${editingId ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                          {editingId ? this.t('updateBtn') : this.t('postBtn')}
+                        </button>
                       </div>
                     </form>
                   </div>
@@ -400,7 +505,10 @@ class App extends Component {
                       <div className="flex justify-between items-start mb-3">
                         <h3 className="text-xl font-bold text-gray-900">{notice.title}</h3>
                         {currentUser instanceof Professor && (
-                          <button onClick={() => this.handleDeleteNotice(notice.id)} className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50"><Trash2 size={18} /></button>
+                          <div className="flex gap-2">
+                            <button onClick={() => this.handleEditClick(notice)} className="text-gray-400 hover:text-blue-500 p-2 rounded-full hover:bg-blue-50" title="Edit"><Edit2 size={18} /></button>
+                            <button onClick={() => this.handleDeleteNotice(notice.id)} className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50" title="Delete"><Trash2 size={18} /></button>
+                          </div>
                         )}
                       </div>
                       <p className="text-gray-600 leading-relaxed mb-4 whitespace-pre-wrap">{notice.content}</p>
