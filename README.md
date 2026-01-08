@@ -128,15 +128,3 @@ This project was developed for the Software Engineering II course and follows a 
 License
 Academic use only.
 
----
-
-## Final verdict
-
-✔ Clean  
-✔ Professional  
-✔ Looks good in VS Code  
-✔ Safe for grading  
-✔ Still modern  
-
-👉 **Use this version.**  
-If you want, I can do a **final GitHub preview check** or help you write the **commit m
