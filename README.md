@@ -20,7 +20,7 @@ The system supports structured, role-based communication through:
 - Major-specific student group chats
 - University-wide announcements managed by professors
 
-Access is restricted to users with a valid `@ue-germany.de` email address.
+Access is restricted to users without a valid `@ue-germany.de` email address.
 
 ---
 
